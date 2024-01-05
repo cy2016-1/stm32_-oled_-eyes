@@ -114,29 +114,27 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-       u8g2_FirstPage(&u8g2);
-       do
-       {          
-        update_data();
-        u8g2_ClearBuffer(&u8g2);
-        u8g2_SetFont(&u8g2, u8g2_font_squeezed_r6_tr);
-        
-        // 画坐标轴
-        draw_x_axis();
-        draw_y_axis();
-        
-        // 以data为Y轴坐标画线
-        for (i = 0; i < 128 - 1; i++) {
-            if (data[i] >= 0) {
-                u8g2_DrawLine(&u8g2, i, data[i], i + 1, data[i + 1]);
-            }
-        }
+    u8g2_FirstPage(&u8g2);
+    do
+    {
+      HAL_GPIO_TogglePin(LED0_GPIO_Port, LED0_Pin);
+      update_data();
+      u8g2_SetFont(&u8g2, u8g2_font_squeezed_r6_tr);
 
-        u8g2_SendBuffer(&u8g2);
-           
-           HAL_GPIO_TogglePin(LED0_GPIO_Port, LED0_Pin);
-           
-       } while (u8g2_NextPage(&u8g2));      
+      // 画坐标轴
+      draw_x_axis();
+      draw_y_axis();
+
+      // 以data为Y轴坐标画线
+      for (i = 0; i < 128 - 1; i++)
+      {
+        if (data[i] >= 0)
+        {
+          u8g2_DrawLine(&u8g2, i, data[i], i + 1, data[i + 1]);
+        }
+      }
+
+    } while (u8g2_NextPage(&u8g2));
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -271,12 +269,6 @@ void draw_y_axis(void)
 void update_data(void)
 {
     static double x = 0;
-    int i;
-    
-    // 把data整体前移1
-    for (i = 0; i < 127; i++) {
-        data[i] = data[i + 1];
-    }
     
     // 将角度转换为弧度  
     double radians = x * M_PI / 180.0;
@@ -284,9 +276,12 @@ void update_data(void)
     // 计算sin函数的值  
     double value = sin(radians);  
     value = SCOPE_Y * (1 - value);
+    
+    // 把data整体前移1
+    memmove(data, data + 1, sizeof(data) - sizeof(data[0]));
     data[127] = value;
     
-    // 增加角度  
+    // 更新下一次的x值
     x += 360.0 / (END_X - START_X);  
     if (x > 360) {
         x -= 360;

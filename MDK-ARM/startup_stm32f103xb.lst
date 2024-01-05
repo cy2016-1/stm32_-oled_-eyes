@@ -471,12 +471,12 @@ ARM Macro Assembler    Page 8
               00000400 
               00000200 
               00000000 
-Command Line: --debug --xref --diag_suppress=9931 --cpu=Cortex-M3 --apcs=interw
-ork --depend=u8g2_i2c_dma\startup_stm32f103xb.d -ou8g2_i2c_dma\startup_stm32f10
-3xb.o -I.\RTE\_u8g2_i2c_dma -ID:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include
- -ID:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include --predefine="__U
-VISION_VERSION SETA 524" --predefine="_RTE_ SETA 1" --predefine="STM32F10X_MD S
-ETA 1" --list=startup_stm32f103xb.lst startup_stm32f103xb.s
+Command Line: --xref --diag_suppress=9931 --cpu=Cortex-M3 --apcs=interwork --de
+pend=u8g2_i2c_dma\startup_stm32f103xb.d -ou8g2_i2c_dma\startup_stm32f103xb.o -I
+.\RTE\_u8g2_i2c_dma -ID:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include -ID:\Ke
+il_v5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include --predefine="__UVISION_V
+ERSION SETA 524" --predefine="_RTE_ SETA 1" --predefine="STM32F10X_MD SETA 1" -
+-list=startup_stm32f103xb.lst startup_stm32f103xb.s
 
 
 
