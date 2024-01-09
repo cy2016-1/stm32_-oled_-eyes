@@ -5,6 +5,7 @@
 #include "Delay.h"
 #include "i2c.h"
 
+// 硬件I2C
 uint8_t u8x8_byte_hw_i2c(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr)
 {
     static uint8_t buffer[1024];
@@ -37,16 +38,12 @@ uint8_t u8x8_byte_hw_i2c(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_p
     case U8X8_MSG_BYTE_END_TRANSFER:
       while (HAL_I2C_GetState(&hi2c1)!=HAL_I2C_STATE_READY)  {}
       while (HAL_I2C_Master_Transmit(&hi2c1,u8x8_GetI2CAddress(u8x8),buffer,buf_idx, 10)!= HAL_OK)
-      //while (HAL_I2C_Master_Transmit_DMA(&hi2c1,u8x8_GetI2CAddress(u8x8),buffer,buf_idx)!= HAL_OK)
       {
         if (HAL_I2C_GetError(&hi2c1)!= HAL_I2C_ERROR_AF)
         {
           Error_Handler();
         }
       }        
-
-      // 不加这个延迟的话，使用DMA时OLED显示不出任何东西
-      //Delay_us(700);
       break;
     
     default:

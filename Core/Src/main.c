@@ -18,8 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "dma.h"
 #include "i2c.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -27,7 +29,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <time.h>
 #include <math.h>
 #include "u8g2.h"
 #include "OLED.h"
@@ -40,11 +41,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define M_PI        3.1415926535    
-#define START_X     10
-#define END_X       118
-#define SCOPE_Y     30    
-
 
 /* USER CODE END PD */
 
@@ -56,23 +52,83 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-u8g2_t u8g2;
-int8_t data[128];
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-void draw(u8g2_t *u8g2);
-void draw_x_axis(void);
-void draw_y_axis(void);
-void update_data(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t GetKeyStatus(void)
+{
+    GPIO_PinState state;
+    
+    state = HAL_GPIO_ReadPin(KEY_GPIO_Port, KEY_Pin);
+    if (state == GPIO_PIN_SET) {
+        HAL_Delay(20);
+        state = HAL_GPIO_ReadPin(KEY_GPIO_Port, KEY_Pin);
+        if (state == GPIO_PIN_SET) {
+            return 1;
+        }
+    }
+    
+    return 0;
+}
 
+// 画眼白
+void DrawEyesWhite(u8g2_t *u8g2)
+{
+    u8g2_SetDrawColor(u8g2, 1);
+    u8g2_DrawDisc(u8g2, 32, 32, 30, U8G2_DRAW_ALL);
+    u8g2_DrawDisc(u8g2, 96, 32, 30, U8G2_DRAW_ALL);
+}
+
+// 画瞳孔
+// x, y: [-15, +15]
+void DrawEyesPupil(u8g2_t *u8g2, int8_t x, int8_t y)
+{
+    int8_t xPos = 32 + x;
+    int8_t yPos = 32 + y;
+    
+    u8g2_SetDrawColor(u8g2, 0);
+    u8g2_DrawDisc(u8g2, xPos, yPos, 15, U8G2_DRAW_ALL);
+    u8g2_DrawDisc(u8g2, xPos + 64, yPos, 15, U8G2_DRAW_ALL);
+    
+    // 瞳孔上的反光
+    u8g2_SetDrawColor(u8g2, 1);
+    u8g2_DrawDisc(u8g2, xPos + 10, yPos - 10, 3, U8G2_DRAW_ALL);
+    u8g2_DrawDisc(u8g2, (xPos + 64) + 10, yPos - 10, 3, U8G2_DRAW_ALL);
+    u8g2_DrawFilledEllipse(u8g2, xPos - 8, yPos + 8, 2, 4, U8G2_DRAW_ALL);
+    u8g2_DrawFilledEllipse(u8g2, (xPos + 64) - 8, yPos + 8, 2, 4, U8G2_DRAW_ALL);
+}
+
+// 画半闭上的眼睛
+void DrawClosedEyes(u8g2_t *u8g2, int8_t x, int8_t y)
+{
+    int8_t xPos = 32 + x;
+    int8_t yPos = 32 + y;
+    
+    u8g2_SetClipWindow(u8g2,0, 32, 127, 63);
+    u8g2_SetDrawColor(u8g2, 1);
+    u8g2_DrawDisc(u8g2, 32, 32, 30, U8G2_DRAW_ALL);
+    u8g2_DrawDisc(u8g2, 96, 32, 30, U8G2_DRAW_ALL);
+    
+    // 画瞳孔
+    u8g2_SetDrawColor(u8g2, 0);
+    u8g2_DrawDisc(u8g2, xPos, yPos, 15, U8G2_DRAW_LOWER_RIGHT|U8G2_DRAW_LOWER_LEFT);
+    u8g2_DrawDisc(u8g2, xPos + 64, yPos, 15, U8G2_DRAW_LOWER_RIGHT|U8G2_DRAW_LOWER_LEFT);
+
+    // 瞳孔上的反光
+    u8g2_SetDrawColor(u8g2, 1);
+    u8g2_DrawDisc(u8g2, xPos + 10, yPos - 10, 3, U8G2_DRAW_ALL);
+    u8g2_DrawDisc(u8g2, (xPos + 64) + 10, yPos - 10, 3, U8G2_DRAW_ALL);
+    u8g2_DrawFilledEllipse(u8g2, xPos - 8, yPos + 8, 2, 4, U8G2_DRAW_ALL);
+    u8g2_DrawFilledEllipse(u8g2, (xPos + 64) - 8, yPos + 8, 2, 4, U8G2_DRAW_ALL);
+    u8g2_SetMaxClipWindow(u8g2);
+}
 
 /* USER CODE END 0 */
 
@@ -83,7 +139,8 @@ void update_data(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-    uint8_t i;
+  u8g2_t u8g2;
+//  char data[32];    
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -105,9 +162,10 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2C1_Init();
+  MX_USART1_UART_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   u8g2_Init(&u8g2);
-  memset(data, 0xFF, sizeof(data));
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -117,27 +175,59 @@ int main(void)
     u8g2_FirstPage(&u8g2);
     do
     {
-      HAL_GPIO_TogglePin(LED0_GPIO_Port, LED0_Pin);
-      update_data();
-      u8g2_SetFont(&u8g2, u8g2_font_squeezed_r6_tr);
+//      u8g2_SetFont(&u8g2, u8g2_font_inb16_mr);
 
-      // 画坐标轴
-      draw_x_axis();
-      draw_y_axis();
+//        memset(data, 0, sizeof(data));
+//      sprintf(data, "%d", coordinates[0] * );
+//      u8g2_DrawStr(&u8g2, 0, 16, data); // x坐标值
 
-      // 以data为Y轴坐标画线
-      for (i = 0; i < 128 - 1; i++)
-      {
-        if (data[i] >= 0)
+//      memset(data, 0, sizeof(data));
+//      sprintf(data, "%d", coordinates[1]);
+//      u8g2_DrawStr(&u8g2, 0, 32, data); // y坐标值
+        int8_t x;
+        int8_t y;
+
+        x = coordinates[1] * 15 / 2048;
+        y = coordinates[0] * 15 / 2048;
+        
+      // 按键状态
+      if (GetKeyStatus())  {    // Key up       
+        if (x * x + y * y < 15 * 15) 
         {
-          u8g2_DrawLine(&u8g2, i, data[i], i + 1, data[i + 1]);
+            DrawEyesWhite(&u8g2);
+            DrawEyesPupil(&u8g2, x, y);
+        }
+        else 
+        {
+            double angle = atan2(y, x);
+            x = 15 * cos(angle);
+            y = 15 * sin(angle);
+            
+            DrawEyesWhite(&u8g2);
+            DrawEyesPupil(&u8g2, x, y);
+        }
+      } else {
+        if (x * x + y * y < 15 * 15) 
+        {
+          DrawClosedEyes(&u8g2, x, y);
+        }
+        else 
+        {
+            double angle = atan2(y, x);
+            x = 15 * cos(angle);
+            y = 15 * sin(angle);
+            
+          DrawClosedEyes(&u8g2, x, y);
         }
       }
-
     } while (u8g2_NextPage(&u8g2));
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    HAL_GPIO_TogglePin(LED0_GPIO_Port, LED0_Pin);
+    
+    // 再次启动DMA
+    ADC_StartDMA();    
   }
   /* USER CODE END 3 */
 }
@@ -150,6 +240,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -179,114 +270,15 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /* USER CODE BEGIN 4 */
-/*官方logo的Demo*/
-void draw(u8g2_t *u8g2)
-{
-    u8g2_SetFontMode(u8g2, 1); /*字体模式选择*/
-    u8g2_SetFontDirection(u8g2, 0); /*字体方向选择*/
-    u8g2_SetFont(u8g2, u8g2_font_inb24_mf); /*字库选择*/
-    u8g2_DrawStr(u8g2, 0, 20, "U");
-    
-    u8g2_SetFontDirection(u8g2, 1);
-    u8g2_SetFont(u8g2, u8g2_font_inb30_mn);
-    u8g2_DrawStr(u8g2, 21,8,"8");
-        
-    u8g2_SetFontDirection(u8g2, 0);
-    u8g2_SetFont(u8g2, u8g2_font_inb24_mf);
-    u8g2_DrawStr(u8g2, 51,30,"g");
-    u8g2_DrawStr(u8g2, 67,30,"\xb2");
-    
-    u8g2_DrawHLine(u8g2, 2, 35, 47);
-    u8g2_DrawHLine(u8g2, 3, 36, 47);
-    u8g2_DrawVLine(u8g2, 45, 32, 12);
-    u8g2_DrawVLine(u8g2, 46, 33, 12);
-  
-    u8g2_SetFont(u8g2, u8g2_font_4x6_tr);
-    u8g2_DrawStr(u8g2, 1,54,"github.com/olikraus/u8g2");
-}
-
-void draw_h_arrow(uint8_t X0, uint8_t Y0, uint8_t X1, uint8_t Y1)
-{   
-    u8g2_DrawLine(&u8g2, X0, Y0, X1, Y1);
-    u8g2_DrawLine(&u8g2, X1 - 5, Y1 - 3, X1, Y1);
-    u8g2_DrawLine(&u8g2, X1 - 5, Y1 + 3, X1, Y1);
-
-}
-
-void draw_v_arrow(uint8_t X0, uint8_t Y0, uint8_t X1, uint8_t Y1)
-{
-    u8g2_DrawLine(&u8g2, X0, Y0, X1, Y1);
-    u8g2_DrawLine(&u8g2, X1 - 3, Y1 + 5, X1, Y1);
-    u8g2_DrawLine(&u8g2, X1 + 3, Y1 + 5, X1, Y1);
-}
-
-// 画x轴
-void draw_x_axis(void)
-{
-    int i;
-    
-    draw_h_arrow(0, 32, 127, 32);   
-    
-    u8g2_DrawStr(&u8g2, START_X - 4, 40, "0");
-    
-    for (i = 1; i <= 3; i++) {
-        char buf[3] = {'0', '0', '\0'};
-        
-        u8g2_DrawVLine(&u8g2, START_X + 30 * i, 29, 3); // 刻度
-        buf[0] = '0' + i * 3;
-        u8g2_DrawStr(&u8g2, START_X + 30 * i - 2, 40, buf); // 值
-    }
-}
-
-// 画y轴
-void draw_y_axis(void)
-{
-    int i;
-    
-    draw_v_arrow(START_X, 63, START_X, 0);  
-    
-    for (i = 1; i <= 2; i++) {
-        char buf[] = {'0', '0', '\0'};
-        
-        u8g2_DrawHLine(&u8g2, START_X - 3, 32 - 13 * i + 4 , 3);
-        buf[0] = '0' + i;
-        u8g2_DrawStr(&u8g2, START_X + 2, 32 - 13 * i + 7, buf);
-    }
-    
-    for (i = 1; i <= 2; i++) {
-        char buf[] = {'-', '1', '0', '\0'};
-        
-        u8g2_DrawHLine(&u8g2, START_X - 3, 32 + 13 * i - 4 , 3);    // 刻度
-        buf[1] = '0' + i;
-        u8g2_DrawStr(&u8g2, START_X + 2, 32 + 13 * i, buf); // 值
-    }
-}
-
-// 更新数据，这里使用正弦函数生成新数据
-void update_data(void)
-{
-    static double x = 0;
-    
-    // 将角度转换为弧度  
-    double radians = x * M_PI / 180.0;
-    
-    // 计算sin函数的值  
-    double value = sin(radians);  
-    value = SCOPE_Y * (1 - value);
-    
-    // 把data整体前移1
-    memmove(data, data + 1, sizeof(data) - sizeof(data[0]));
-    data[127] = value;
-    
-    // 更新下一次的x值
-    x += 360.0 / (END_X - START_X);  
-    if (x > 360) {
-        x -= 360;
-    }
-}
 
 /* USER CODE END 4 */
 
